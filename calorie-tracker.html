@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Intake" />
+  <title>Intake</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #0c0c10;
+      --surface:  #13131a;
+      --border:   #1f1f2e;
+      --border2:  #2a2a3a;
+      --text:     #e8e4dc;
+      --muted:    #555566;
+      --dim:      #333344;
+      --gold:     #f0c040;
+      --green:    #6ec4a0;
+      --red:      #c0392b;
+      --blue:     #7aafdf;
+      --radius:   14px;
+      --font-serif: 'DM Serif Display', Georgia, serif;
+      --font-mono:  'DM Mono', 'Courier New', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: var(--font-mono); min-height: 100dvh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
+    }
+    .app { max-width: 480px; margin: 0 auto; padding: 20px 16px 48px; }
+
+    /* ── Header ── */
+    .header { text-align: center; margin-bottom: 20px; }
+    .header-label  { font-size: 10px; letter-spacing: .25em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+    .header-title  { font-family: var(--font-serif); font-size: 28px; color: var(--text); font-weight: normal; font-style: italic; }
+    .header-date   { font-size: 11px; color: var(--muted); letter-spacing: .08em; margin-top: 5px; }
+
+    /* ── Target bar ── */
+    .target-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px 18px; margin-bottom: 14px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.4);
+    }
+    .target-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+    .target-label { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+    .target-nums  { font-size: 13px; font-variant-numeric: tabular-nums; }
+    .target-cur   { color: var(--gold); }
+    .target-sep   { color: var(--dim); margin: 0 4px; }
+    .target-goal  { color: var(--muted); }
+    .progress-track {
+      height: 5px; background: var(--border2); border-radius: 3px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; background: var(--gold); border-radius: 3px;
+      transition: width .3s ease, background .3s;
+      width: 0%;
+    }
+    .progress-fill.over { background: var(--red); }
+    .progress-fill.done { background: var(--green); }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      box-shadow: 0 4px 32px rgba(0,0,0,.5);
+    }
+
+    /* ── Column header ── */
+    .col-head {
+      display: grid; grid-template-columns: 2fr 2fr 1fr;
+      padding: 9px 16px 7px; border-bottom: 1px solid var(--border);
+      font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted);
+    }
+    .col-head span:nth-child(2) { text-align: center; }
+    .col-head span:nth-child(3) { text-align: right; }
+
+    /* ── Food row ── */
+    .food-row {
+      display: grid; grid-template-columns: 2fr 2fr 1fr;
+      align-items: center; padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      transition: background .2s;
+    }
+    .food-row:last-child { border-bottom: none; }
+    .food-row.active { background: rgba(240,192,64,.04); }
+
+    .food-name { font-size: 14px; color: var(--muted); transition: color .2s; }
+    .food-row.active .food-name { color: var(--text); }
+    .food-sub  { font-size: 10px; color: var(--dim); margin-top: 2px; }
+
+    /* manual-cal row has blue accent */
+    .food-row.manual-row.active { background: rgba(122,175,223,.05); }
+    .food-row.manual-row.active .food-name { color: var(--blue); }
+
+    .stepper { display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .stepper-btn {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 1px solid var(--border2); background: var(--bg);
+      color: var(--text); font-size: 20px; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none; transition: border-color .15s, opacity .15s;
+      font-family: var(--font-mono);
+    }
+    .stepper-btn:active { background: var(--border2); }
+    .stepper-btn.disabled { opacity: .25; pointer-events: none; }
+
+    .stepper-val {
+      min-width: 48px; text-align: center; font-size: 15px;
+      font-family: var(--font-mono); color: var(--dim);
+      transition: color .2s; font-variant-numeric: tabular-nums;
+    }
+    .stepper-val.active { color: var(--gold); }
+    .stepper-val.active.manual { color: var(--blue); }
+    .stepper-unit { font-size: 9px; color: var(--muted); display: block; text-align: center; }
+
+    .food-cal {
+      text-align: right; font-size: 15px; font-family: var(--font-mono);
+      color: var(--dim); font-variant-numeric: tabular-nums; transition: color .2s;
+    }
+    .food-cal.active { color: var(--gold); }
+    .food-cal.active.manual { color: var(--blue); }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex; margin-top: 22px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tab {
+      flex: 1; padding: 10px 0; text-align: center;
+      font-size: 10px; letter-spacing: .15em; text-transform: uppercase;
+      color: var(--muted); cursor: pointer;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: color .15s, border-color .15s;
+    }
+    .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+    .log-section { margin-top: 0; }
+    .section-hidden { display: none; }
+
+    /* ── History ── */
+    .log-date-group { margin-top: 16px; }
+    .log-date-label { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); padding: 0 2px 6px; }
+
+    .hist-row {
+      display: grid; grid-template-columns: 1fr auto;
+      align-items: center; padding: 12px 14px;
+      border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .hist-row:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+    .hist-row:last-child  { border-bottom: none; border-radius: 0 0 var(--radius) var(--radius); }
+    .hist-row:only-child  { border-radius: var(--radius); }
+    .hist-date { font-size: 13px; color: var(--text); }
+    .hist-sub  { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .hist-cal  { font-size: 18px; color: var(--green); font-variant-numeric: tabular-nums; }
+
+    .empty-log { text-align: center; padding: 32px 0; color: var(--dim); font-size: 13px; }
+
+    /* ── Overnight formula card ── */
+    .formula-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 18px; margin-top: 14px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.4);
+    }
+    .formula-label { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .formula-main  { display: flex; align-items: baseline; gap: 6px; }
+    .formula-val   { font-size: 28px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--blue); }
+    .formula-unit  { font-size: 13px; color: var(--muted); }
+    .formula-sub   { font-size: 10px; color: var(--dim); margin-top: 5px; }
+    .formula-met   { color: var(--green); font-size: 14px; }
+
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in { animation: fadeSlide .25s ease both; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div class="header-label">Daily Intake</div>
+    <div class="header-title">Baby Tracker</div>
+    <div class="header-date" id="headerDate"></div>
+  </div>
+
+  <!-- Target / progress -->
+  <div class="target-card">
+    <div class="target-row">
+      <span class="target-label">Daily Target</span>
+      <span class="target-nums">
+        <span class="target-cur" id="progressCur">0</span>
+        <span class="target-sep">/</span>
+        <span class="target-goal">1200 kcal</span>
+      </span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+  </div>
+
+  <!-- Food table -->
+  <div class="card" id="foodTable"></div>
+
+  <!-- Overnight formula -->
+  <div class="formula-card" id="formulaCard">
+    <div class="formula-label">Overnight Formula Needed</div>
+    <div class="formula-main" id="formulaMain"></div>
+    <div class="formula-sub" id="formulaSub"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" id="tab-hist" onclick="showTab('hist')">History</div>
+  </div>
+  <div class="log-section" id="section-hist"></div>
+
+</div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────────
+const TARGET_KCAL = 1200;
+const FORMULA_KCAL_PER_OZ = 22;
+const ML_PER_OZ = 29.5735;
+
+const FOODS = [
+  { id:'bacon',     name:'Bacon',      unit:'strip', calPerUnit:43,   step:0.5  },
+  { id:'avocado',   name:'Avocado',    unit:'tbsp',  calPerUnit:24,   step:0.5  },
+  { id:'cheese',    name:'Cheese',     unit:'oz',    calPerUnit:110,  step:0.25 },
+  { id:'raspberry', name:'Raspberry',  unit:'berry', calPerUnit:1.3,  step:1    },
+  { id:'blueberry', name:'Blueberry',  unit:'berry', calPerUnit:0.8,  step:1    },
+  { id:'milk',      name:'Formula',    unit:'oz',    calPerUnit:22,   step:0.5  },
+  // manual cal entry — treated specially
+  { id:'manual',    name:'Other',      unit:'kcal',  calPerUnit:1,    step:5    },
+];
+
+// ── Storage keys ──────────────────────────────────────────────────────────────
+const AMOUNTS_KEY = 'bct-amounts-v2';   // {date, amounts:{id->number}}
+const HIST_KEY    = 'bct-history-v2';   // [{date, amounts:{id->number}}]
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmt(n)    { return n % 1 === 0 ? String(n) : n.toFixed(1); }
+function calFmt(n) { return n < 2 && n > 0 ? n.toFixed(1) : Math.round(n).toString(); }
+function todayStr() { return new Date().toISOString().slice(0,10); }
+
+function displayDate(iso) {
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt   = new Date(y, m-1, d);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const yest  = new Date(today); yest.setDate(yest.getDate()-1);
+  if (dt.getTime() === today.getTime()) return 'Today';
+  if (dt.getTime() === yest.getTime())  return 'Yesterday';
+  return dt.toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'});
+}
+
+function dayCals(amounts) {
+  return FOODS.reduce((s,f) => s + f.calPerUnit * (amounts[f.id]||0), 0);
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let amounts = Object.fromEntries(FOODS.map(f => [f.id, 0]));
+let history = [];   // [{date, amounts}]
+
+// ── Load & midnight rollover ──────────────────────────────────────────────────
+function initState() {
+  // load history
+  try { history = JSON.parse(localStorage.getItem(HIST_KEY)) || []; }
+  catch { history = []; }
+
+  // load today's amounts (or detect rollover)
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem(AMOUNTS_KEY)); } catch {}
+
+  const today = todayStr();
+
+  if (stored && stored.date && stored.date !== today) {
+    // midnight rollover: archive previous day if it had any data
+    const prevCals = dayCals(stored.amounts || {});
+    if (prevCals > 0) {
+      // remove any existing entry for that date, then prepend
+      history = history.filter(h => h.date !== stored.date);
+      history.unshift({ date: stored.date, amounts: stored.amounts });
+      localStorage.setItem(HIST_KEY, JSON.stringify(history));
+    }
+    // start fresh
+    amounts = Object.fromEntries(FOODS.map(f => [f.id, 0]));
+    saveAmounts();
+  } else if (stored && stored.date === today) {
+    amounts = Object.assign(Object.fromEntries(FOODS.map(f => [f.id, 0])), stored.amounts || {});
+  } else {
+    amounts = Object.fromEntries(FOODS.map(f => [f.id, 0]));
+    saveAmounts();
+  }
+}
+
+function saveAmounts() {
+  localStorage.setItem(AMOUNTS_KEY, JSON.stringify({ date: todayStr(), amounts }));
+}
+
+// ── Header ────────────────────────────────────────────────────────────────────
+document.getElementById('headerDate').textContent =
+  new Date().toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
+
+// ── Build food table ──────────────────────────────────────────────────────────
+function buildTable() {
+  const table = document.getElementById('foodTable');
+  table.innerHTML = `
+    <div class="col-head">
+      <span>Food</span><span>Amount</span><span>kcal</span>
+    </div>` +
+    FOODS.map(f => {
+      const isManual = f.id === 'manual';
+      return `
+      <div class="food-row${isManual?' manual-row':''}" id="row-${f.id}">
+        <div>
+          <div class="food-name" id="name-${f.id}">${f.name}</div>
+          <div class="food-sub">${isManual ? 'manual entry' : calFmt(f.calPerUnit)+' kcal/'+f.unit}</div>
+        </div>
+        <div class="stepper">
+          <button class="stepper-btn disabled" id="dec-${f.id}"
+            ontouchstart="handleStep('${f.id}',-1,event)"
+            onclick="handleStep('${f.id}',-1,event)">−</button>
+          <div>
+            <div class="stepper-val${isManual?' manual':''}" id="val-${f.id}">0</div>
+            <span class="stepper-unit" id="unit-${f.id}">${f.unit}</span>
+          </div>
+          <button class="stepper-btn" id="inc-${f.id}"
+            ontouchstart="handleStep('${f.id}',1,event)"
+            onclick="handleStep('${f.id}',1,event)">+</button>
+        </div>
+        <div class="food-cal${isManual?' manual':''}" id="cal-${f.id}">—</div>
+      </div>`;
+    }).join('');
+}
+
+// ── Step handler ──────────────────────────────────────────────────────────────
+function handleStep(id, dir, e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  const food = FOODS.find(f => f.id === id);
+  amounts[id] = Math.max(0, parseFloat((amounts[id] + dir * food.step).toFixed(2)));
+  saveAmounts();
+  updateRow(food);
+  updateProgress();
+  updateFormula();
+}
+
+// ── Update single row ─────────────────────────────────────────────────────────
+function updateRow(food) {
+  const amt    = amounts[food.id];
+  const active = amt > 0;
+  const cals   = food.calPerUnit * amt;
+  const isManual = food.id === 'manual';
+
+  document.getElementById(`row-${food.id}`).classList.toggle('active', active);
+  document.getElementById(`name-${food.id}`).classList.toggle('active', active);  // not used in CSS but harmless
+
+  const valEl = document.getElementById(`val-${food.id}`);
+  valEl.textContent = fmt(amt);
+  valEl.classList.toggle('active', active);
+
+  const unitEl = document.getElementById(`unit-${food.id}`);
+  // for manual row unit is always 'kcal'; for others pluralise
+  if (!isManual) unitEl.textContent = food.unit + (amt !== 1 ? 's' : '');
+
+  const calEl = document.getElementById(`cal-${food.id}`);
+  calEl.textContent = active ? calFmt(cals) : '—';
+  calEl.classList.toggle('active', active);
+
+  document.getElementById(`dec-${food.id}`).classList.toggle('disabled', amt <= 0);
+}
+
+// ── Progress bar ──────────────────────────────────────────────────────────────
+function updateProgress() {
+  const total = dayCals(amounts);
+  const pct   = Math.min(total / TARGET_KCAL * 100, 100);
+  const fill  = document.getElementById('progressFill');
+  fill.style.width = pct + '%';
+  fill.classList.toggle('over',  total > TARGET_KCAL * 1.05);
+  fill.classList.toggle('done',  total >= TARGET_KCAL && total <= TARGET_KCAL * 1.05);
+  document.getElementById('progressCur').textContent = calFmt(total);
+}
+
+// ── Overnight formula ─────────────────────────────────────────────────────────
+function updateFormula() {
+  const total    = dayCals(amounts);
+  const remaining = TARGET_KCAL - total;
+  const main  = document.getElementById('formulaMain');
+  const sub   = document.getElementById('formulaSub');
+
+  if (remaining <= 0) {
+    main.innerHTML = `<span class="formula-met">Goal met ✓</span>`;
+    sub.textContent = 'No overnight formula needed.';
+  } else {
+    const oz = remaining / FORMULA_KCAL_PER_OZ;
+    const ml = oz * ML_PER_OZ;
+    main.innerHTML = `<span class="formula-val">${Math.round(ml)}</span><span class="formula-unit">ml</span>`;
+    sub.textContent = `${oz.toFixed(1)} oz · ${Math.round(remaining)} kcal remaining · @ ${FORMULA_KCAL_PER_OZ} kcal/oz`;
+  }
+}
+
+// ── Render history tab ────────────────────────────────────────────────────────
+function renderHistory() {
+  const sec = document.getElementById('section-hist');
+
+  if (history.length === 0) {
+    sec.innerHTML = '<div class="empty-log">No past days yet</div>';
+    return;
+  }
+
+  sec.innerHTML = `<div style="margin-top:16px;"></div>` + history.map(h => {
+    const total = dayCals(h.amounts);
+
+    // build per-food breakdown (skip zeros and manual kcal)
+    const parts = FOODS
+      .filter(f => f.id !== 'manual' && (h.amounts[f.id]||0) > 0)
+      .map(f => `${f.name} ${fmt(h.amounts[f.id])} ${f.unit}${h.amounts[f.id]!==1?'s':''}`)
+      .join(' · ');
+    const manualCal = h.amounts['manual'] || 0;
+    const manualStr = manualCal > 0 ? ` · Other ${calFmt(manualCal)} kcal` : '';
+
+    return `
+      <div class="log-date-group animate-in">
+        <div class="log-date-label">${displayDate(h.date)}</div>
+        <div class="card">
+          <div class="hist-row">
+            <div>
+              <div class="hist-date">${calFmt(total)} kcal</div>
+              <div class="hist-sub">${parts}${manualStr}</div>
+            </div>
+            <div class="hist-cal" style="font-size:13px;color:var(--muted);">${h.date}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function showTab(tab) {
+  ['hist'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+    document.getElementById(`section-${t}`).classList.toggle('section-hidden', t !== tab);
+  });
+  if (tab === 'hist') renderHistory();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+initState();
+buildTable();
+FOODS.forEach(f => updateRow(f));
+updateProgress();
+updateFormula();
+renderHistory();
+</script>
+</body>
+</html>
