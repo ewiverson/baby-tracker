@@ -174,6 +174,26 @@
     .formula-sub   { font-size: 10px; color: var(--dim); margin-top: 5px; }
     .formula-met   { color: var(--green); font-size: 14px; }
 
+    /* ── Edit mode ── */
+    .edit-banner {
+      display: flex; justify-content: center; align-items: center; gap: 12px;
+      margin-top: 6px;
+    }
+    .edit-banner-label { font-size: 11px; color: var(--blue); letter-spacing: .05em; }
+    .edit-back-btn {
+      background: none; border: 1px solid var(--border2); border-radius: 6px;
+      color: var(--muted); font-size: 10px; font-family: var(--font-mono);
+      padding: 3px 8px; cursor: pointer; letter-spacing: .05em;
+    }
+    .edit-back-btn:active { background: var(--border2); }
+
+    .edit-hist-btn {
+      background: none; border: 1px solid var(--border2); border-radius: 6px;
+      color: var(--muted); font-size: 10px; font-family: var(--font-mono);
+      padding: 4px 10px; cursor: pointer; letter-spacing: .05em; white-space: nowrap;
+    }
+    .edit-hist-btn:active { background: var(--border2); }
+
     @keyframes fadeSlide {
       from { opacity: 0; transform: translateY(6px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -188,6 +208,10 @@
     <div class="header-label">Daily Intake</div>
     <div class="header-title">Baby Tracker</div>
     <div class="header-date" id="headerDate"></div>
+    <div class="edit-banner" id="editBanner" style="display:none">
+      <span class="edit-banner-label" id="editBannerLabel"></span>
+      <button class="edit-back-btn" onclick="stopEditing()">← Today</button>
+    </div>
   </div>
 
   <!-- Target / progress -->
@@ -247,7 +271,10 @@ const HIST_KEY    = 'bct-history-v2';   // [{date, amounts:{id->number}}]
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(n)    { return n % 1 === 0 ? String(n) : n.toFixed(1); }
 function calFmt(n) { return n < 2 && n > 0 ? n.toFixed(1) : Math.round(n).toString(); }
-function todayStr() { return new Date().toISOString().slice(0,10); }
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 function displayDate(iso) {
   const [y,m,d] = iso.split('-').map(Number);
@@ -265,7 +292,8 @@ function dayCals(amounts) {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let amounts = Object.fromEntries(FOODS.map(f => [f.id, 0]));
-let history = [];   // [{date, amounts}]
+let history = [];        // [{date, amounts}]
+let editingDate = null;  // null = today, string = editing a past day
 
 // ── Load & midnight rollover ──────────────────────────────────────────────────
 function initState() {
@@ -300,12 +328,57 @@ function initState() {
 }
 
 function saveAmounts() {
-  localStorage.setItem(AMOUNTS_KEY, JSON.stringify({ date: todayStr(), amounts }));
+  if (editingDate) {
+    const idx = history.findIndex(h => h.date === editingDate);
+    if (idx >= 0) history[idx].amounts = { ...amounts };
+    else history.push({ date: editingDate, amounts: { ...amounts } });
+    localStorage.setItem(HIST_KEY, JSON.stringify(history));
+  } else {
+    localStorage.setItem(AMOUNTS_KEY, JSON.stringify({ date: todayStr(), amounts }));
+  }
 }
 
 // ── Header ────────────────────────────────────────────────────────────────────
-document.getElementById('headerDate').textContent =
-  new Date().toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
+function updateHeaderDate() {
+  if (editingDate) {
+    document.getElementById('headerDate').textContent = displayDate(editingDate);
+    document.getElementById('editBannerLabel').textContent = 'editing ' + editingDate;
+    document.getElementById('editBanner').style.display = 'flex';
+  } else {
+    document.getElementById('headerDate').textContent =
+      new Date().toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
+    document.getElementById('editBanner').style.display = 'none';
+  }
+}
+
+// ── Edit past day ─────────────────────────────────────────────────────────────
+function startEditDay(date) {
+  editingDate = date;
+  const hist = history.find(h => h.date === date);
+  amounts = Object.assign(Object.fromEntries(FOODS.map(f => [f.id, 0])), hist ? hist.amounts : {});
+  updateHeaderDate();
+  FOODS.forEach(f => updateRow(f));
+  updateProgress();
+  updateFormula();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function stopEditing() {
+  editingDate = null;
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem(AMOUNTS_KEY)); } catch {}
+  const today = todayStr();
+  if (stored && stored.date === today) {
+    amounts = Object.assign(Object.fromEntries(FOODS.map(f => [f.id, 0])), stored.amounts || {});
+  } else {
+    amounts = Object.fromEntries(FOODS.map(f => [f.id, 0]));
+  }
+  updateHeaderDate();
+  FOODS.forEach(f => updateRow(f));
+  updateProgress();
+  updateFormula();
+  renderHistory();
+}
 
 // ── Build food table ──────────────────────────────────────────────────────────
 function buildTable() {
@@ -433,7 +506,10 @@ function renderHistory() {
               <div class="hist-date">${calFmt(total)} kcal</div>
               <div class="hist-sub">${parts}${manualStr}</div>
             </div>
-            <div class="hist-cal" style="font-size:13px;color:var(--muted);">${h.date}</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="hist-cal" style="font-size:13px;color:var(--muted);">${h.date}</div>
+              <button class="edit-hist-btn" onclick="startEditDay('${h.date}')">edit</button>
+            </div>
           </div>
         </div>
       </div>`;
@@ -455,6 +531,7 @@ buildTable();
 FOODS.forEach(f => updateRow(f));
 updateProgress();
 updateFormula();
+updateHeaderDate();
 renderHistory();
 </script>
 </body>
