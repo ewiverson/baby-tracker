@@ -172,6 +172,27 @@
     .formula-val   { font-size: 28px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--blue); }
     .formula-unit  { font-size: 13px; color: var(--muted); }
     .formula-sub   { font-size: 10px; color: var(--dim); margin-top: 5px; }
+
+    /* ── Notes ── */
+    .notes-card {
+      margin-top: 14px;
+    }
+    .notes-label { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; padding: 0 2px; }
+    .notes-input {
+      width: 100%; resize: vertical;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 14px;
+      color: var(--text); font-family: var(--font-mono); font-size: 13px; line-height: 1.5;
+      box-shadow: 0 4px 24px rgba(0,0,0,.4);
+    }
+    .notes-input::placeholder { color: var(--dim); }
+    .notes-input:focus { outline: none; border-color: var(--border2); }
+
+    .hist-notes {
+      font-size: 12px; color: var(--text); margin-top: 8px;
+      padding-top: 8px; border-top: 1px solid var(--border);
+      white-space: pre-wrap; line-height: 1.5;
+    }
     .formula-met   { color: var(--green); font-size: 14px; }
 
     /* ── Edit mode ── */
@@ -239,6 +260,13 @@
     <div class="formula-sub" id="formulaSub"></div>
   </div>
 
+  <!-- Notes -->
+  <div class="notes-card">
+    <div class="notes-label">Notes</div>
+    <textarea class="notes-input" id="notesInput" rows="2"
+      placeholder="Notes for the day…" oninput="onNotesInput()"></textarea>
+  </div>
+
   <!-- Tabs -->
   <div class="tabs">
     <div class="tab active" id="tab-hist" onclick="showTab('hist')">History</div>
@@ -270,6 +298,9 @@ const HIST_KEY    = 'bct-history-v2';   // [{date, amounts:{id->number}}]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(n)    { return n % 1 === 0 ? String(n) : n.toFixed(1); }
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function calFmt(n) { return n < 2 && n > 0 ? n.toFixed(1) : Math.round(n).toString(); }
 function todayStr() {
   const d = new Date();
@@ -292,7 +323,8 @@ function dayCals(amounts) {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let amounts = Object.fromEntries(FOODS.map(f => [f.id, 0]));
-let history = [];        // [{date, amounts}]
+let notes = '';          // notes for the current (today or editing) day
+let history = [];        // [{date, amounts, notes}]
 let editingDate = null;  // null = today, string = editing a past day
 
 // ── Load & midnight rollover ──────────────────────────────────────────────────
@@ -310,19 +342,23 @@ function initState() {
   if (stored && stored.date && stored.date !== today) {
     // midnight rollover: archive previous day if it had any data
     const prevCals = dayCals(stored.amounts || {});
-    if (prevCals > 0) {
+    const prevNotes = (stored.notes || '').trim();
+    if (prevCals > 0 || prevNotes) {
       // remove any existing entry for that date, then prepend
       history = history.filter(h => h.date !== stored.date);
-      history.unshift({ date: stored.date, amounts: stored.amounts });
+      history.unshift({ date: stored.date, amounts: stored.amounts, notes: stored.notes || '' });
       localStorage.setItem(HIST_KEY, JSON.stringify(history));
     }
     // start fresh
     amounts = Object.fromEntries(FOODS.map(f => [f.id, 0]));
+    notes = '';
     saveAmounts();
   } else if (stored && stored.date === today) {
     amounts = Object.assign(Object.fromEntries(FOODS.map(f => [f.id, 0])), stored.amounts || {});
+    notes = stored.notes || '';
   } else {
     amounts = Object.fromEntries(FOODS.map(f => [f.id, 0]));
+    notes = '';
     saveAmounts();
   }
 }
@@ -330,12 +366,22 @@ function initState() {
 function saveAmounts() {
   if (editingDate) {
     const idx = history.findIndex(h => h.date === editingDate);
-    if (idx >= 0) history[idx].amounts = { ...amounts };
-    else history.push({ date: editingDate, amounts: { ...amounts } });
+    if (idx >= 0) { history[idx].amounts = { ...amounts }; history[idx].notes = notes; }
+    else history.push({ date: editingDate, amounts: { ...amounts }, notes });
     localStorage.setItem(HIST_KEY, JSON.stringify(history));
   } else {
-    localStorage.setItem(AMOUNTS_KEY, JSON.stringify({ date: todayStr(), amounts }));
+    localStorage.setItem(AMOUNTS_KEY, JSON.stringify({ date: todayStr(), amounts, notes }));
   }
+}
+
+// ── Notes ─────────────────────────────────────────────────────────────────────
+function onNotesInput() {
+  notes = document.getElementById('notesInput').value;
+  saveAmounts();
+}
+
+function updateNotesField() {
+  document.getElementById('notesInput').value = notes;
 }
 
 // ── Header ────────────────────────────────────────────────────────────────────
@@ -356,6 +402,8 @@ function startEditDay(date) {
   editingDate = date;
   const hist = history.find(h => h.date === date);
   amounts = Object.assign(Object.fromEntries(FOODS.map(f => [f.id, 0])), hist ? hist.amounts : {});
+  notes = hist ? (hist.notes || '') : '';
+  updateNotesField();
   updateHeaderDate();
   FOODS.forEach(f => updateRow(f));
   updateProgress();
@@ -370,9 +418,12 @@ function stopEditing() {
   const today = todayStr();
   if (stored && stored.date === today) {
     amounts = Object.assign(Object.fromEntries(FOODS.map(f => [f.id, 0])), stored.amounts || {});
+    notes = stored.notes || '';
   } else {
     amounts = Object.fromEntries(FOODS.map(f => [f.id, 0]));
+    notes = '';
   }
+  updateNotesField();
   updateHeaderDate();
   FOODS.forEach(f => updateRow(f));
   updateProgress();
@@ -496,6 +547,8 @@ function renderHistory() {
       .join(' · ');
     const manualCal = h.amounts['manual'] || 0;
     const manualStr = manualCal > 0 ? ` · Other ${calFmt(manualCal)} kcal` : '';
+    const noteStr = (h.notes || '').trim();
+    const noteHtml = noteStr ? `<div class="hist-notes">${escapeHtml(noteStr)}</div>` : '';
 
     return `
       <div class="log-date-group animate-in">
@@ -505,6 +558,7 @@ function renderHistory() {
             <div>
               <div class="hist-date">${calFmt(total)} kcal</div>
               <div class="hist-sub">${parts}${manualStr}</div>
+              ${noteHtml}
             </div>
             <div style="display:flex;align-items:center;gap:10px;">
               <div class="hist-cal" style="font-size:13px;color:var(--muted);">${h.date}</div>
@@ -528,6 +582,7 @@ function showTab(tab) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 initState();
 buildTable();
+updateNotesField();
 FOODS.forEach(f => updateRow(f));
 updateProgress();
 updateFormula();
